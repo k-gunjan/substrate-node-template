@@ -169,7 +169,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			cid: T::Hash,
 			new_price: Option<BalanceOf<T>>,
-      dna: Option<[u8;1]>,
+			gender: Option<Gender>,
+            dna: Option<[u8;1]>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -177,20 +178,21 @@ pub mod pallet {
 			// ensure!(Self::is_kitty_owner(&kitty_id, &sender)?, <Error<T>>::NotKittyOwner);
       //Action: checking if file already created
       ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyClaimed);
-
-      //create File data
-      // let file = File {
-      //   dna: dna.unwrap_or_else([1]),
-      //   price: new_price.clone(),
-      //   gender: gender.unwrap_or_else(Gender.Male),
-      //   owner: AccountOf::<T>,
-      // }
+	  let cdna: u8 = 0x01;
+	  let cc: [u8; 1] = [cdna; 1];
+    //   create File data
+      let file = File::<T> {
+        dna: dna.unwrap_or(cc),
+        price: new_price.clone(),
+        gender: gender.unwrap_or_else(|| Gender::Male),
+        owner: sender.clone(),
+      };
 
 			// let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 
 			// ACTION #2: Set the Kitty price and update new Kitty infomation to storage.
 			// kitty.price = new_price.clone();
-			// <Files<////////////////////T>>::insert(&cid, file);
+		<Files<T>>::insert(&cid, file);
 
 			// ACTION #3: Deposit a "PriceSet" event.
 			// Self::deposit_event(Event::PriceSet(sender, kitty_id, new_price));

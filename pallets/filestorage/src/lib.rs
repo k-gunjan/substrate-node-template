@@ -169,7 +169,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			cid: T::Hash,
 			new_price: Option<BalanceOf<T>>,
-      dna: Option<[u8;16]>,
+      dna: Option<[u8;1]>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
@@ -180,7 +180,7 @@ pub mod pallet {
 
       //create File data
       // let file = File {
-      //   dna: dna.unwrap_or_else([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4]),
+      //   dna: dna.unwrap_or_else([1]),
       //   price: new_price.clone(),
       //   gender: gender.unwrap_or_else(Gender.Male),
       //   owner: AccountOf::<T>,

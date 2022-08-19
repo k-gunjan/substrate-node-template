@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#[allow(unused_imports)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 
@@ -7,6 +8,7 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+//   #[allow(unused_imports)]
   use frame_support::pallet_prelude::*;
   use frame_system::pallet_prelude::*;
   // use frame_support::inherent::Vec;
@@ -29,17 +31,17 @@ pub mod pallet {
 
 
   // Struct for holding File information.
-	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct File<T: Config> {
-		pub dna: [u8; 16], // Using 16 bytes to represent a kitty DNA
+		pub dna: [u8; 1], // Using 16 bytes to represent a kitty DNA
 		pub price: Option<BalanceOf<T>>,
 		pub gender: Gender,
 		pub owner: AccountOf<T>,
 	}
 
   // Set Gender type in Kitty struct.
-	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Gender {
@@ -48,16 +50,16 @@ pub mod pallet {
 	}
 
     
-  #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug, MaxEncodedLen, TypeInfo)]
-  pub struct File<AccountId, Hash> {
-      cid : Hash,
-      uploader: AccountId,
-      file_link: String,
-      allow_download: bool,
-      file_type: String,
-      cost: u32,
-      file_size: u32,
-  }
+  // #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug, MaxEncodedLen, TypeInfo)]
+  // pub struct File1<AccountId, Hash> {
+  //     cid : Hash,
+  //     uploader: AccountId,
+  //     file_link: String,
+  //     allow_download: bool,
+  //     file_type: String,
+  //     cost: u32,
+  //     file_size: u32,
+  // }
   
 
   #[pallet::pallet]
@@ -71,14 +73,14 @@ pub mod pallet {
     type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
     /// The Currency handler for the Kitties pallet.
-		type Currency: Currency<Self::AccountId>;
+	type Currency: Currency<Self::AccountId>;
 
-		/// The maximum amount of Kitties a single account can own.
-		#[pallet::constant]
-		type MaxFileOwned: Get<u32>;
+	/// The maximum amount of Kitties a single account can own.
+	#[pallet::constant]
+	type MaxFileOwned: Get<u32>;
 
-		/// The type of Randomness we want to specify for this pallet.
-		type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
+	/// The type of Randomness we want to specify for this pallet.
+	type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
   }
   
   
@@ -177,18 +179,18 @@ pub mod pallet {
       ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyClaimed);
 
       //create File data
-      let file = File::<T> {
-        dna: dna.unwrap_or_else([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4]),
-        price: new_price.clone(),
-        gender: gender.unwrap_or_else(Gender.Male),
-        owner: AccountOf<T>,
-      }
+      // let file = File {
+      //   dna: dna.unwrap_or_else([1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4]),
+      //   price: new_price.clone(),
+      //   gender: gender.unwrap_or_else(Gender.Male),
+      //   owner: AccountOf::<T>,
+      // }
 
 			// let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 
 			// ACTION #2: Set the Kitty price and update new Kitty infomation to storage.
 			// kitty.price = new_price.clone();
-			<Files<T>>::insert(&cid, file);
+			// <Files<////////////////////T>>::insert(&cid, file);
 
 			// ACTION #3: Deposit a "PriceSet" event.
 			// Self::deposit_event(Event::PriceSet(sender, kitty_id, new_price));

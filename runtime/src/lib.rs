@@ -145,6 +145,8 @@ parameter_types! {
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 	pub const SS58Prefix: u8 = 42;
 	pub const MaxFileOwned: u32 = 9999;
+	pub const MaxLength:u32 = 50;
+	pub const MinLength:u32 = 5;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -279,6 +281,8 @@ impl pallet_file_storage::Config for Runtime {
 	type Currency = Balances;
 	type KittyRandomness = RandomnessCollectiveFlip;
 	type MaxFileOwned = MaxFileOwned;
+	type MaxLength = MaxLength;
+	type MinLength = MinLength;
 
 }
 

@@ -14,12 +14,14 @@ pub mod pallet {
   // use frame_support::inherent::Vec;
   use scale_info::prelude::string::String;
 	use frame_support::{
+		inherent::Vec,
 		sp_runtime::traits::Hash,
 		traits::{tokens::ExistenceRequirement, Currency, Randomness},
 		transactional,
 	};
 	use scale_info::TypeInfo;
 	use sp_io::hashing::blake2_128;
+	// use url::Url;
 
 
   #[cfg(feature = "std")]
@@ -34,10 +36,12 @@ pub mod pallet {
 	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct File<T: Config> {
-		pub dna: [u8; 1], // Using 16 bytes to represent a kitty DNA
 		pub price: Option<BalanceOf<T>>,
-		pub gender: Gender,
 		pub owner: AccountOf<T>,
+		pub file_type : FileType,
+		pub file_link: BoundedVec<u8, T::MaxLength>,
+		pub allow_download :bool,
+		pub file_size : u32,
 	}
 
   // Set Gender type in Kitty struct.
@@ -49,6 +53,19 @@ pub mod pallet {
 		Female,
 	}
 
+	 // Set Gender type in Kitty struct.
+	 #[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	 #[scale_info(skip_type_params(T))]
+	 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	 pub enum FileType {
+		 Pdf,
+		 Image,
+		 Text,
+		 Doc,
+		 Audio,
+		 Video,
+		 Other
+	 }
     
   // #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug, MaxEncodedLen, TypeInfo)]
   // pub struct File1<AccountId, Hash> {
@@ -79,6 +96,13 @@ pub mod pallet {
 	#[pallet::constant]
 	type MaxFileOwned: Get<u32>;
 
+	/// The minimum length a file_link may be.
+	#[pallet::constant]
+	type MinLength: Get<u32>;
+	/// The maximum length a file_link may be.
+	#[pallet::constant]
+	type MaxLength: Get<u32>;
+
 	/// The type of Randomness we want to specify for this pallet.
 	type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
   }
@@ -102,6 +126,12 @@ pub mod pallet {
   pub enum Error<T> {
     /// The claim already exists.
     AlreadyClaimed,
+	///already uploaded
+	AlreadyUploaded,
+	///link of the file is too long
+	LinkTooLong,
+	///link of the file is too short
+	LinkTooShort,
     /// The claim does not exist, so it cannot be revoked.
     NoSuchClaim,
     /// The claim is owned by another account, so caller can't revoke it.
@@ -159,6 +189,17 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn cnt_file_downloaded)]
+	/// Keeps track of what accounts own what Kitty.
+	pub(super) type CntFileDownloaded<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::Hash,
+		u64,
+		ValueQuery,
+	>;
+
   #[pallet::call]
   impl<T: Config> Pallet<T> {
 
@@ -168,31 +209,43 @@ pub mod pallet {
 		pub fn create_file(
 			origin: OriginFor<T>,
 			cid: T::Hash,
-			new_price: Option<BalanceOf<T>>,
-			gender: Option<Gender>,
-            dna: Option<[u8;1]>,
+			cost: Option<BalanceOf<T>>,
+			file_type: Option<FileType>,
+			file_link: Vec<u8>,
+			allow_download :bool,
+            file_size: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			// ACTION #1a: Checking Kitty owner
 			// ensure!(Self::is_kitty_owner(&kitty_id, &sender)?, <Error<T>>::NotKittyOwner);
       //Action: checking if file already created
-      ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyClaimed);
-	  let cdna: u8 = 0x01;
-	  let cc: [u8; 1] = [cdna; 1];
+      ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyUploaded);
+
+	  let bounded_file_link: BoundedVec<_, _> =
+				file_link.try_into().map_err(|()| Error::<T>::LinkTooLong)?;
+	  ensure!(bounded_file_link.len() >= T::MinLength::get() as usize, Error::<T>::LinkTooShort);
+
+
     //   create File data
       let file = File::<T> {
-        dna: dna.unwrap_or(cc),
-        price: new_price.clone(),
-        gender: gender.unwrap_or_else(|| Gender::Male),
+        price: cost.clone(),
+        file_type: file_type.unwrap_or_else(|| FileType::Other),
         owner: sender.clone(),
+		file_link: bounded_file_link,
+		allow_download,
+		file_size,
       };
 
 			// let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 
 			// ACTION #2: Set the Kitty price and update new Kitty infomation to storage.
 			// kitty.price = new_price.clone();
-		<Files<T>>::insert(&cid, file);
+	  <Files<T>>::insert(&cid, file);
+	  let mut cnt = <FileCnt<T>>::get();
+	  cnt+=1;
+	  <FileCnt<T>>::set(cnt);
+
 
 			// ACTION #3: Deposit a "PriceSet" event.
 			// Self::deposit_event(Event::PriceSet(sender, kitty_id, new_price));

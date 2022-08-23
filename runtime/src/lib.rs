@@ -45,6 +45,8 @@ pub use sp_runtime::{Perbill, Permill};
 
 /// Import the template pallet.
 pub use pallet_template;
+pub use pallet_poe;
+pub use pallet_file_storage;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -142,6 +144,9 @@ parameter_types! {
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
 		::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 	pub const SS58Prefix: u8 = 42;
+	pub const MaxFileOwned: u32 = 9999;
+	pub const MaxLength:u32 = 50;
+	pub const MinLength:u32 = 5;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -267,6 +272,20 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+impl pallet_poe::Config for Runtime {
+	type Event = Event;
+}
+
+impl pallet_file_storage::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type KittyRandomness = RandomnessCollectiveFlip;
+	type MaxFileOwned = MaxFileOwned;
+	type MaxLength = MaxLength;
+	type MinLength = MinLength;
+
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -284,6 +303,8 @@ construct_runtime!(
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
+		PoeModule: pallet_poe,
+		FileStorage: pallet_file_storage,
 	}
 );
 

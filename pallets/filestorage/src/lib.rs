@@ -4,8 +4,6 @@
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 
-
-
 #[frame_support::pallet]
 pub mod pallet {
 //   #[allow(unused_imports)]
@@ -20,8 +18,12 @@ pub mod pallet {
 		transactional,
 	};
 	use scale_info::TypeInfo;
-	use sp_io::hashing::blake2_128;
+	use sp_io::hashing::{
+		blake2_128,
+		sha2_256
+	};
 	// use url::Url;
+	use hex_literal;
 
 
   #[cfg(feature = "std")]
@@ -44,40 +46,15 @@ pub mod pallet {
 		pub file_size : u32,
 	}
 
-  // Set Gender type in Kitty struct.
-	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	#[scale_info(skip_type_params(T))]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Gender {
-		Male,
-		Female,
-	}
-
-	 // Set Gender type in Kitty struct.
+	 // Set FileType type in File struct.
 	 #[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	 #[scale_info(skip_type_params(T))]
 	 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	 pub enum FileType {
-		 Pdf,
-		 Image,
-		 Text,
-		 Doc,
-		 Audio,
-		 Video,
-		 Other
+		 Normal,
+		 Privileged,
 	 }
     
-  // #[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug, MaxEncodedLen, TypeInfo)]
-  // pub struct File1<AccountId, Hash> {
-  //     cid : Hash,
-  //     uploader: AccountId,
-  //     file_link: String,
-  //     allow_download: bool,
-  //     file_type: String,
-  //     cost: u32,
-  //     file_size: u32,
-  // }
-  
 
   #[pallet::pallet]
   #[pallet::generate_store(pub(super) trait Store)]
@@ -89,10 +66,10 @@ pub mod pallet {
     /// Because this pallet emits events, it depends on the runtime's definition of an event.
     type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-    /// The Currency handler for the Kitties pallet.
+    /// The Currency handler for the FileStorage pallet.
 	type Currency: Currency<Self::AccountId>;
 
-	/// The maximum amount of Kitties a single account can own.
+	/// The maximum number of files a single account can own.
 	#[pallet::constant]
 	type MaxFileOwned: Get<u32>;
 
@@ -102,6 +79,9 @@ pub mod pallet {
 	/// The maximum length a file_link may be.
 	#[pallet::constant]
 	type MaxLength: Get<u32>;
+
+	/// max length of vector of owners of a file
+	// type MaxLengthOwners: Get<Self::Hash>;
 
 	/// The type of Randomness we want to specify for this pallet.
 	type KittyRandomness: Randomness<Self::Hash, Self::BlockNumber>;
@@ -113,60 +93,30 @@ pub mod pallet {
   #[pallet::event]
   #[pallet::generate_deposit(pub(super) fn deposit_event)]
   pub enum Event<T: Config> {
-    /// Event emitted when a claim has been created.
-    ClaimCreated { who: T::AccountId, claim: T::Hash },
-    /// Event emitted when a claim is revoked by the owner.
-    ClaimRevoked { who: T::AccountId, claim: T::Hash },
     ///Event emitted when a file is uploaded 
     FileCreated { who: T::AccountId, cid: T::Hash },
+	///Event file Downloaded
+	FileDownloaded {cid: T::Hash, count: u64},
+	///Event ownership changed
+	FileOwnerChanged {cid: T::Hash, new_owner: T::AccountId},
   }
   
   
   #[pallet::error]
   pub enum Error<T> {
-    /// The claim already exists.
-    AlreadyClaimed,
 	///already uploaded
 	AlreadyUploaded,
+	///file does not exist
+	FileDoesNotExist,
 	///link of the file is too long
 	LinkTooLong,
 	///link of the file is too short
 	LinkTooShort,
-    /// The claim does not exist, so it cannot be revoked.
-    NoSuchClaim,
-    /// The claim is owned by another account, so caller can't revoke it.
-    NotClaimOwner,
-    /// Handles arithemtic overflow when incrementing the Kitty counter.
-		KittyCntOverflow,
-		/// An account cannot own more Kitties than `MaxKittyCount`.
-		ExceedMaxFileOwned,
-		/// Buyer cannot be the owner.
-		BuyerIsKittyOwner,
-		/// Cannot transfer a kitty to its owner.
-		TransferToSelf,
-		/// Handles checking whether the Kitty exists.
-		KittyNotExist,
-		/// Handles checking that the Kitty is owned by the account transferring, buying or setting a price for it.
-		NotKittyOwner,
-		/// Ensures the Kitty is for sale.
-		KittyNotForSale,
-		/// Ensures that the buying price is greater than the asking price.
-		KittyBidPriceTooLow,
-		/// Ensures that an account has enough funds to purchase a Kitty.
-		NotEnoughBalance,
+	///sender is not the owner of the file
+	SenderIsNotOwner,
+	///file download not allowed at the time of upload
+	FileNotDownloadable,
   }
-
-  
-  // #[pallet::storage]
-  // pub(super) type  Files<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, File< T::AccountId, T::Hash> >; 
-  // pub(super) type Claims<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, (T::AccountId, T::BlockNumber)>;
-  // pub(super) type  Files<T> = StorageMap<_, Blake2_128Concat, T, File >; 
-  //cid ,(uploader, file_link, allow_download, file_type, cost, file_size)
-  // pub(super) type FileOwner<T: Config> = StorageMap<_, Blake2_128Concat, u32 , T::AccountId>;
-  
-  // Dispatchable functions allow users to interact with the pallet and invoke state changes.
-  // These functions materialize as "extrinsics", which are often compared to transactions.
-  // Dispatchable functions must be annotated with a weight and must return a DispatchResult.
 
   #[pallet::storage]
 	#[pallet::getter(fn file_cnt)]
@@ -180,19 +130,19 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn files_owned)]
-	/// Keeps track of what accounts own what Kitty.
+	/// Keeps track of what accounts own what File.
 	pub(super) type FilesOwned<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
+		T::Hash,
 		T::AccountId,
-		BoundedVec<T::Hash, T::MaxFileOwned>,
-		ValueQuery,
+		// ValueQuery,
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn cnt_file_downloaded)]
-	/// Keeps track of what accounts own what Kitty.
-	pub(super) type CntFileDownloaded<T: Config> = StorageMap<
+	#[pallet::getter(fn files_download_cnt)]
+	/// Keeps track of count of downloads file wise.
+	pub(super) type FilesDownloadCnt<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::Hash,
@@ -200,11 +150,48 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-  #[pallet::call]
-  impl<T: Config> Pallet<T> {
+	#[pallet::storage]
+	#[pallet::getter(fn total_download_cnt)]
+	/// Keeps track of total number of downloads.
+	pub(super) type TotalDownloadCount<T: Config> = StorageValue<
+		_,
+		u64,
+		ValueQuery,
+	>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn file_downloaders)]
+	/// Keeps track of what accounts downloaded a file
+	pub(super) type FileDownloaders<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		[u64;32],
+		(T::AccountId, T::Hash, u64),
+		// ValueQuery,
+	>;
 
-    /// Upload File and sets its properties and updates storage.
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        // /helper fund
+		// fn calculate_hash<T: Hash>(t: &T) -> u64 {
+		// 	let mut s = DefaultHasher::new();
+		// 	t.hash(&mut s);
+		// 	s.finish()
+		// }
+
+		// #[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+        // pub fn my_transfer(origin: OriginFor<T>,  source: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+        // let owner = ensure_signed(origin)?;
+        // match PalletDataStore::<T>::get() {
+        //   Some(destination) => {
+        //       T::Currency::transfer(&source, &destination, amount, ExistenceRequirement::KeepAlive)?;
+        //   },
+        //   None => return Err(Error::<T>::NoneValue.into()),
+        // };
+        //  Ok(())
+        //    }
+
+        /// Upload File and sets its properties and updates storage.
 		#[pallet::weight(100)]
 		pub fn create_file(
 			origin: OriginFor<T>,
@@ -217,42 +204,122 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			// ACTION #1a: Checking Kitty owner
-			// ensure!(Self::is_kitty_owner(&kitty_id, &sender)?, <Error<T>>::NotKittyOwner);
-      //Action: checking if file already created
-      ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyUploaded);
+            //Action: checking if the file already created
+            ensure!(!Files::<T>::contains_key(&cid), Error::<T>::AlreadyUploaded);
+      
+	        let bounded_file_link: BoundedVec<_, _> =
+	      			file_link.try_into().map_err(|()| Error::<T>::LinkTooLong)?;
+	        ensure!(bounded_file_link.len() >= T::MinLength::get() as usize, Error::<T>::LinkTooShort);
+      
+            let new_cost: Option<BalanceOf<T>> = 
+	                 if file_size < 250 {
+	      			None
+	      		   } else {
+	      			cost.clone()
+	      		   };
+			// let dave: T::AccountId = hex_literal::hex!["5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"].into();
+			// T::Currency::transfer(&sender, &dave, cost.unwrap(), ExistenceRequirement::KeepAlive)?;
+            //create File data
+            let file = File::<T> {
+            price: new_cost,
+            file_type: file_type.unwrap_or_else(|| FileType::Normal),
+            owner: sender.clone(),
+	      	file_link: bounded_file_link,
+	      	allow_download,
+	      	file_size,
+            };
+			//insert file
+	        <Files<T>>::insert(&cid, file);
 
-	  let bounded_file_link: BoundedVec<_, _> =
-				file_link.try_into().map_err(|()| Error::<T>::LinkTooLong)?;
-	  ensure!(bounded_file_link.len() >= T::MinLength::get() as usize, Error::<T>::LinkTooShort);
+			//update number of total files uploaded
+	        let mut cnt = <FileCnt<T>>::get();
+	        cnt+=1;
+	        <FileCnt<T>>::set(cnt);
+      
+	        //update owner of the files
+	        <FilesOwned<T>>::insert(&cid, &sender);
+      
+            // Deposite file created event
+            Self::deposit_event(Event::FileCreated { who: sender, cid });
+	      		Ok(())
+	    }
+
+    
+
+        /// Download File .
+		#[pallet::weight(100)]
+		pub fn download_file(
+			origin: OriginFor<T>,
+			cid: T::Hash,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			// check if file exists
+            ensure!(Files::<T>::contains_key(&cid), Error::<T>::FileDoesNotExist);
+            //check if file is downloadable
+			let is_allowed = <Files<T>>::get(&cid).unwrap().allow_download;
+	        ensure!(is_allowed, Error::<T>::FileNotDownloadable);
+			//increment the download count of individual files
+	        <FilesDownloadCnt<T>>::mutate(&cid, |x| {
+				let cnt = *x;
+				*x = cnt + 1; //Some(cnt + 1);
+			});   
+
+			//increment overall file download count
+			<TotalDownloadCount<T>>::mutate(|x| *x+=1 );
+
+			//trace downloader details
+			//check if file downloaded
+			// let mut has_str = sha2_256(sender.to_vec());
+			// has_str.push_str(sender.decode_into_raw_public_keys());
+			// has_str;
+			// let ifd:bool = <FileDownloaders<T>>::contains_key(&cid);
+			if 1 == 1 {
+				//if downloaded
+				// let downloader: T::AccountId = <FileDownloaders<T>>::get(&cid).unwrap()[0];
+				// //check if sender downloaded
+				// if sender == downloader {
+				// 	//update the count of downlodes
+				// 	<FileDownloaders<T>>::mutate(&cid, |x| {
+				// 		let cnt = *x[1];
+
+				// 	} )
+				// }
+			} else {
+				//file never downloaded so add the details
+				// <FileDownloaders<T>>::insert(&cid, (sender,1));
+			}
 
 
-    //   create File data
-      let file = File::<T> {
-        price: cost.clone(),
-        file_type: file_type.unwrap_or_else(|| FileType::Other),
-        owner: sender.clone(),
-		file_link: bounded_file_link,
-		allow_download,
-		file_size,
-      };
+            //get the count of download of the file
+			let cnt: u64 = <FilesDownloadCnt<T>>::get(&cid); 
+            // Deposite file created event
+            Self::deposit_event(Event::FileDownloaded{ cid, count: cnt });
+	      	Ok(())
+	    }
 
-			// let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
+		/// Transfer Ownership .
+		#[pallet::weight(100)]
+		pub fn change_owner_of_file(
+			origin: OriginFor<T>,
+			cid: T::Hash,
+			new_owner: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			//check if file exists
+            ensure!(Files::<T>::contains_key(&cid), Error::<T>::FileDoesNotExist);
+			//get the owner of the file
+			let owner = <FilesOwned<T>>::get(&cid);
+			//check if the file is owneed by the sender
+			ensure!(owner == core::prelude::v1::Some(sender.clone()), Error::<T>::SenderIsNotOwner);
+	        //increment the download count by one
+	        <FilesOwned<T>>::mutate(&cid, |_| sender.clone());      
+            // Deposite file owner changed event
+            Self::deposit_event(Event::FileOwnerChanged{ cid, new_owner: sender });
+	      		Ok(())
+	    }
 
-			// ACTION #2: Set the Kitty price and update new Kitty infomation to storage.
-			// kitty.price = new_price.clone();
-	  <Files<T>>::insert(&cid, file);
-	  let mut cnt = <FileCnt<T>>::get();
-	  cnt+=1;
-	  <FileCnt<T>>::set(cnt);
+    }
 
 
-			// ACTION #3: Deposit a "PriceSet" event.
-			// Self::deposit_event(Event::PriceSet(sender, kitty_id, new_price));
-
-      // Deposite file created event
-      Self::deposit_event(Event::FileCreated { who: sender, cid });
-			Ok(())
-		}
-  }
 }

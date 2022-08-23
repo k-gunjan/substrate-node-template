@@ -147,6 +147,7 @@ parameter_types! {
 	pub const MaxFileOwned: u32 = 9999;
 	pub const MaxLength:u32 = 50;
 	pub const MinLength:u32 = 5;
+	// pub const MaxLengthOwners:u32 = 9999;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -283,6 +284,7 @@ impl pallet_file_storage::Config for Runtime {
 	type MaxFileOwned = MaxFileOwned;
 	type MaxLength = MaxLength;
 	type MinLength = MinLength;
+	// type MaxLengthOwners: MaxLengthOwners;
 
 }
 
